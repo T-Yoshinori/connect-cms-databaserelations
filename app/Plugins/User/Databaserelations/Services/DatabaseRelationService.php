@@ -138,19 +138,34 @@ class DatabaseRelationService
                 ? DatabasesColumns::find($display_column_id)
                 : $this->getDefaultDisplayColumn($other_database_id);
 
+            // 関連先DBの標準「一覧に表示する」設定をそのまま利用する。
+            $list_columns = DatabasesColumns::where('databases_id', $other_database_id)
+                ->where('list_hide_flag', 0)
+                ->orderBy('row_group')
+                ->orderBy('column_group')
+                ->orderBy('display_sequence')
+                ->orderBy('id')
+                ->get();
+
             $detail_frame_id = $side === 'one' ? $relation->many_detail_frame_id : $relation->one_detail_frame_id;
             $detail_frame = $this->resolveDetailFrame($other_database_id, $detail_frame_id);
+            $other_database = Databases::find($other_database_id);
 
-            $items = $record_ids->map(function ($id) use ($inputs, $display_column, $detail_frame) {
+            $items = $record_ids->map(function ($id) use ($inputs, $display_column, $detail_frame, $list_columns) {
                 $input = $inputs->get($id);
                 if (!$input) {
                     return null;
                 }
 
+                $column_values = $list_columns->mapWithKeys(function ($column) use ($input) {
+                    return [$column->id => $this->getRecordColumnValue($input, $column)];
+                });
+
                 return (object) [
                     'input' => $input,
                     'label' => $this->getRecordLabel($input, $display_column),
                     'detail_frame' => $detail_frame,
+                    'column_values' => $column_values,
                 ];
             })->filter()->values();
 
@@ -158,6 +173,9 @@ class DatabaseRelationService
                 'relation' => $relation,
                 'side' => $side,
                 'name' => $name,
+                'database' => $other_database,
+                'display_column' => $display_column,
+                'list_columns' => $list_columns,
                 'items' => $items,
             ];
         });
@@ -217,6 +235,28 @@ class DatabaseRelationService
                 ->orderBy('display_sequence')
                 ->orderBy('id')
                 ->first();
+    }
+
+    private function getRecordColumnValue($input, $column)
+    {
+        if ($column->column_type == 'created') {
+            return (string) $input->created_at;
+        }
+        if ($column->column_type == 'updated') {
+            return (string) $input->updated_at;
+        }
+        if ($column->column_type == 'posted') {
+            return (string) $input->posted_at;
+        }
+        if ($column->column_type == 'display') {
+            return (string) $input->display_sequence;
+        }
+
+        $value = DatabasesInputCols::where('databases_inputs_id', $input->id)
+            ->where('databases_columns_id', $column->id)
+            ->value('value');
+
+        return is_null($value) ? '' : (string) $value;
     }
 
     private function getRecordLabel($input, $display_column)
