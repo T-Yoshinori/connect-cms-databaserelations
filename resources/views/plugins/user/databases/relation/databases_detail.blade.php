@@ -111,47 +111,63 @@
 @endphp
 
 @if ($related_records->isNotEmpty())
-<div class="card mt-4">
-    <div class="card-header"><strong>関連データ</strong></div>
-    <div class="card-body">
-        @foreach ($related_records as $related_record)
-            <div class="row @if(! $loop->last) mb-3 @endif">
-                <div class="col-md-3">
-                    <strong>{{ $related_record->name }}</strong>
+    @foreach ($related_records as $related_record)
+    <div class="card mt-4">
+        <div class="card-header">
+            <strong>{{ optional($related_record->database)->databases_name ?: $related_record->name }}</strong>
+        </div>
+        <div class="card-body p-0">
+            @if ($related_record->items->isNotEmpty())
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                @foreach ($related_record->list_columns as $related_column)
+                                    <th>{{ $related_column->column_name }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($related_record->items as $item)
+                                <tr>
+                                    @foreach ($related_record->list_columns as $related_column)
+                                        <td>
+                                            @php
+                                                $related_value = $item->column_values->get($related_column->id, '');
+                                                $is_title_column = $related_record->display_column
+                                                    && (int) $related_record->display_column->id === (int) $related_column->id;
+                                            @endphp
+                                            @if ($is_title_column && $item->detail_frame)
+                                                @php
+                                                    $related_query = http_build_query(array_filter([
+                                                        'relation_origin_page_id' => $page->id,
+                                                        'relation_origin_frame_id' => $frame_id,
+                                                        'relation_origin_record_id' => $inputs->id,
+                                                        'relation_return_page_id' => $relation_return_frame ? $relation_return_page_id : null,
+                                                        'relation_return_frame_id' => $relation_return_frame ? $relation_return_frame_id : null,
+                                                    ], function ($value) {
+                                                        return !is_null($value);
+                                                    }));
+                                                @endphp
+                                                <a href="{{url('/')}}/plugin/databases/detail/{{$item->detail_frame->page_id}}/{{$item->detail_frame->id}}/{{$item->input->id}}?{{$related_query}}#frame-{{$item->detail_frame->id}}">
+                                                    {{ strlen($related_value) ? $related_value : $item->label }}
+                                                </a>
+                                            @else
+                                                {{ $related_value }}
+                                            @endif
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
-                <div class="col-md-9">
-                    @if ($related_record->items->isNotEmpty())
-                        @foreach ($related_record->items as $item)
-                            <div>
-                                @if ($item->detail_frame)
-                                    @php
-                                        $related_query = http_build_query(array_filter([
-                                            'relation_origin_page_id' => $page->id,
-                                            'relation_origin_frame_id' => $frame_id,
-                                            'relation_origin_record_id' => $inputs->id,
-                                            'relation_return_page_id' => $relation_return_frame ? $relation_return_page_id : null,
-                                            'relation_return_frame_id' => $relation_return_frame ? $relation_return_frame_id : null,
-                                        ], function ($value) {
-                                            return !is_null($value);
-                                        }));
-                                    @endphp
-                                    <a href="{{url('/')}}/plugin/databases/detail/{{$item->detail_frame->page_id}}/{{$item->detail_frame->id}}/{{$item->input->id}}?{{$related_query}}#frame-{{$item->detail_frame->id}}">
-                                        {{ $item->label }}
-                                    </a>
-                                @else
-                                    {{ $item->label }}
-                                    <small class="text-muted">（詳細表示先を選択してください）</small>
-                                @endif
-                            </div>
-                        @endforeach
-                    @else
-                        <span class="text-muted">関連付けなし</span>
-                    @endif
-                </div>
-            </div>
-        @endforeach
+            @else
+                <div class="p-3 text-muted">関連付けなし</div>
+            @endif
+        </div>
     </div>
-</div>
+    @endforeach
 @endif
 
 {{-- 戻る --}}
