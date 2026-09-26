@@ -1,0 +1,33 @@
+name: Build release package
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'downloads/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build package
+        run: |
+          bash scripts/build-release.sh 0.9.0-beta.1
+          mkdir -p downloads
+          cp build/connect-cms-databaserelations-0.9.0-beta.1.zip downloads/
+      - name: Commit package
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/connect-cms-databaserelations-0.9.0-beta.1.zip
+          if git diff --cached --quiet; then
+            echo "Package is already up to date."
+          else
+            git commit -m "Build DatabaseRelations 0.9.0-beta.1 package"
+            git push
+          fi
