@@ -2,7 +2,7 @@
 
 Connect-CMSの汎用データベース同士に、双方向の1対多リレーションを追加する非公式プラグインです。
 
-> バージョン: 0.9.0-beta.1  
+> バージョン: 0.9.0-beta.2  
 > 開発・提供: ゆうゆう企画  
 > 状態: ベータ版
 
@@ -14,6 +14,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 - どちら側から変更しても同じ関連付けを更新
 - リレーションごとに表示名・表示項目・表示順を設定
 - Databasesの「リレーション連携」テンプレートで関連データを詳細画面に表示
+- 関連データを連携先DBの一覧表示項目による表形式で表示
 - 関連データから相手側DBの詳細画面へ移動
 - DatabaseRelations → DB一覧 → 詳細 → 関連先詳細 → 元詳細 → 一覧 → DatabaseRelations の戻り導線
 - 1つのDBに複数の独立したリレーションを設定可能
@@ -41,7 +42,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 
 ## ダウンロード
 
-- [connect-cms-databaserelations-0.9.0-beta.1.zip](downloads/connect-cms-databaserelations-0.9.0-beta.1.zip)
+- [connect-cms-databaserelations-0.9.0-beta.2.zip](downloads/connect-cms-databaserelations-0.9.0-beta.2.zip)
 
 ## インストール
 
