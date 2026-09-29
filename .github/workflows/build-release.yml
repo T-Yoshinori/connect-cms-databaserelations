@@ -17,17 +17,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build package
         run: |
-          bash scripts/build-release.sh 0.9.0-beta.2
+          bash scripts/build-release.sh 0.9.0-beta.3
           mkdir -p downloads
-          cp build/connect-cms-databaserelations-0.9.0-beta.2.zip downloads/
+          cp build/connect-cms-databaserelations-0.9.0-beta.3.zip downloads/
       - name: Commit package
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads/connect-cms-databaserelations-0.9.0-beta.2.zip
+          git add downloads/connect-cms-databaserelations-0.9.0-beta.3.zip
           if git diff --cached --quiet; then
             echo "Package is already up to date."
           else
-            git commit -m "Build DatabaseRelations 0.9.0-beta.2 package"
+            git commit -m "Build DatabaseRelations 0.9.0-beta.3 package"
             git push
           fi

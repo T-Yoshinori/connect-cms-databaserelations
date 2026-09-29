@@ -2,7 +2,7 @@
 @section("plugin_contents_$frame->id")
 @if(empty($database))
 <div class="alert alert-info">使用するDBが設定されていません。</div>
-@elseif($relations->isEmpty())
+@elseif($relations->isEmpty() && $entity_relations->isEmpty())
 <div class="alert alert-info">このDBを含むリレーション定義はまだありません。</div>
 @else
 <div class="mb-3 d-flex justify-content-between align-items-center">
@@ -13,9 +13,10 @@
  </a>
  @endif
 </div>
-<div class="table-responsive"><table class="table table-sm table-bordered table-hover"><thead><tr><th>レコード</th>@foreach($relations as $relation)<th>{{$relation_display->get($relation->id)->name}}</th>@endforeach @can('frames.edit',[[null,$frame->plugin_name,$buckets,$frame]])<th></th>@endcan</tr></thead><tbody>
+<div class="table-responsive"><table class="table table-sm table-bordered table-hover"><thead><tr><th>レコード</th>@foreach($relations as $relation)<th>{{$relation_display->get($relation->id)->name}}</th>@endforeach @foreach($entity_relations as $entity_relation)<th>{{$entity_display->get($entity_relation->id)->name}}</th>@endforeach @can('frames.edit',[[null,$frame->plugin_name,$buckets,$frame]])<th></th>@endcan</tr></thead><tbody>
 @foreach($source_inputs as $input)<tr><td>{{$source_labels->get($input->id,'#'.$input->id)}}</td>
 @foreach($relations as $relation)@php($labels=$relation_display->get($relation->id)->values->get($input->id,collect()))<td>@if($labels->isEmpty())－@else{!! $labels->map(function($v){return e($v);})->implode('<br>') !!}@endif</td>@endforeach
+@foreach($entity_relations as $entity_relation)@php($entity_labels=$entity_display->get($entity_relation->id)->values->get($input->id,collect()))<td>@if($entity_labels->isEmpty())－@else{!! $entity_labels->map(function($v){return e($v);})->implode('<br>') !!}@endif</td>@endforeach
 @can('frames.edit',[[null,$frame->plugin_name,$buckets,$frame]])<td class="text-right"><a href="{{url('/')}}/plugin/databaserelations/editRecordRelations/{{$page->id}}/{{$frame_id}}/{{$input->id}}#frame-{{$frame->id}}" class="btn btn-sm btn-outline-primary">関連設定</a></td>@endcan
 </tr>@endforeach
 </tbody></table></div>
