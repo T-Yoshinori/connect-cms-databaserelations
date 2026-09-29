@@ -43,6 +43,26 @@ class DatabaseRelationService
         return collect();
     }
 
+    public function saveRelationValues($relation, $databases_id, $record_id, array $other_record_ids)
+    {
+        $side = $relation->sideForDatabase($databases_id);
+        $other_record_ids = collect($other_record_ids)
+            ->filter()
+            ->map(function ($id) { return (int) $id; })
+            ->unique()
+            ->values();
+
+        if ($relation->isManyToMany()) {
+            return $this->saveManyToMany($relation->id, $side, $record_id, $other_record_ids);
+        }
+
+        if ($side === 'one') {
+            return $this->saveFromOneSide($relation->id, $record_id, $other_record_ids->all());
+        }
+
+        return $this->saveFromManySide($relation->id, $record_id, (int) ($other_record_ids->first() ?: 0));
+    }
+
     public function saveFromOneSide($relation_id, $one_record_id, array $many_record_ids)
     {
         $many_record_ids = collect($many_record_ids)
@@ -57,36 +77,85 @@ class DatabaseRelationService
             ->delete();
 
         foreach ($many_record_ids as $many_record_id) {
-            // 多側レコードは同一リレーション内で1側レコードを1件だけ持つ。
+            // 1:N では多側レコードの所属先を1件に保つ。
+            DatabasesRelationValues::where('databases_relation_id', $relation_id)
+                ->where('many_record_id', $many_record_id)
+                ->where('one_record_id', '<>', $one_record_id)
+                ->delete();
+
             DatabasesRelationValues::updateOrCreate(
                 [
                     'databases_relation_id' => $relation_id,
+                    'one_record_id' => $one_record_id,
                     'many_record_id' => $many_record_id,
                 ],
-                [
-                    'one_record_id' => $one_record_id,
-                ]
+                []
             );
         }
     }
 
     public function saveFromManySide($relation_id, $many_record_id, $one_record_id)
     {
+        DatabasesRelationValues::where('databases_relation_id', $relation_id)
+            ->where('many_record_id', $many_record_id)
+            ->delete();
+
         if (!$one_record_id) {
-            return DatabasesRelationValues::where('databases_relation_id', $relation_id)
-                ->where('many_record_id', $many_record_id)
-                ->delete();
+            return null;
         }
 
-        return DatabasesRelationValues::updateOrCreate(
-            [
-                'databases_relation_id' => $relation_id,
-                'many_record_id' => $many_record_id,
-            ],
-            [
-                'one_record_id' => $one_record_id,
-            ]
-        );
+        return DatabasesRelationValues::create([
+            'databases_relation_id' => $relation_id,
+            'one_record_id' => $one_record_id,
+            'many_record_id' => $many_record_id,
+        ]);
+    }
+
+    private function saveManyToMany($relation_id, $side, $record_id, $other_record_ids)
+    {
+        $query = DatabasesRelationValues::where('databases_relation_id', $relation_id);
+
+        if ($side === 'one') {
+            $query->where('one_record_id', $record_id)
+                ->whereNotIn('many_record_id', $other_record_ids)
+                ->delete();
+
+            foreach ($other_record_ids as $many_record_id) {
+                DatabasesRelationValues::updateOrCreate(
+                    [
+                        'databases_relation_id' => $relation_id,
+                        'one_record_id' => $record_id,
+                        'many_record_id' => $many_record_id,
+                    ],
+                    []
+                );
+            }
+            return;
+        }
+
+        $query->where('many_record_id', $record_id)
+            ->whereNotIn('one_record_id', $other_record_ids)
+            ->delete();
+
+        foreach ($other_record_ids as $one_record_id) {
+            DatabasesRelationValues::updateOrCreate(
+                [
+                    'databases_relation_id' => $relation_id,
+                    'one_record_id' => $one_record_id,
+                    'many_record_id' => $record_id,
+                ],
+                []
+            );
+        }
+    }
+
+    public function hasManyToManyConflicts($relation_id)
+    {
+        return DatabasesRelationValues::where('databases_relation_id', $relation_id)
+            ->select('many_record_id')
+            ->groupBy('many_record_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->exists();
     }
 
     public function cleanupOrphanValues($databases_id)
