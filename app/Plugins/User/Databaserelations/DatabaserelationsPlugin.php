@@ -6,12 +6,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User\DatabaseRelations\DatabasesRelations;
 use App\Models\User\DatabaseRelations\DatabasesRelationValues;
+use App\Models\User\DatabaseRelations\DatabasesEntityRelations;
+use App\Models\User\DatabaseRelations\DatabasesEntityRelationValues;
+use App\Models\Common\Group;
+use App\User;
+use App\Enums\UserStatus;
 use App\Models\User\Databases\Databases;
 use App\Models\User\Databases\DatabasesColumns;
 use App\Models\User\Databases\DatabasesInputCols;
 use App\Models\User\Databases\DatabasesInputs;
 use App\Models\Core\FrameConfig;
 use App\Plugins\User\Databaserelations\Services\DatabaseRelationService;
+use App\Plugins\User\Databaserelations\Services\DatabaseEntityRelationService;
 use App\Plugins\User\UserPluginBase;
 
 class DatabaserelationsPlugin extends UserPluginBase
@@ -22,7 +28,7 @@ class DatabaserelationsPlugin extends UserPluginBase
     {
         return [
             'get' => ['index', 'editRelations', 'editRecordRelations'],
-            'post' => ['saveFrameDatabase', 'saveRelation', 'deleteRelation', 'saveRecordRelations'],
+            'post' => ['saveFrameDatabase', 'saveRelation', 'deleteRelation', 'saveEntityRelation', 'saveGroupEntityRelation', 'deleteEntityRelation', 'saveRecordRelations'],
         ];
     }
 
@@ -33,6 +39,9 @@ class DatabaserelationsPlugin extends UserPluginBase
             'saveFrameDatabase' => ['frames.edit'],
             'saveRelation' => ['frames.edit'],
             'deleteRelation' => ['frames.delete'],
+            'saveEntityRelation' => ['frames.edit'],
+            'saveGroupEntityRelation' => ['frames.edit'],
+            'deleteEntityRelation' => ['frames.delete'],
             'editRecordRelations' => ['frames.edit'],
             'saveRecordRelations' => ['frames.edit'],
         ];
@@ -44,10 +53,13 @@ class DatabaserelationsPlugin extends UserPluginBase
         $database = $databases_id ? Databases::find($databases_id) : null;
         $service = new DatabaseRelationService();
         $relations = $databases_id ? $service->getRelations($databases_id) : collect();
+        $entity_service = new DatabaseEntityRelationService();
+        $entity_relations = $databases_id ? $entity_service->getRelations($databases_id) : collect();
         $database_frame = $databases_id ? $service->resolveDatabaseFrameForRelations($databases_id, $relations) : null;
 
         if ($databases_id) {
             $service->cleanupOrphanValues($databases_id);
+            $entity_service->cleanupOrphanValues($databases_id);
         }
 
         $source_inputs = $databases_id
@@ -83,8 +95,42 @@ class DatabaserelationsPlugin extends UserPluginBase
             ]);
         }
 
+        $entity_display = collect();
+        foreach ($entity_relations as $entity_relation) {
+            $per_record = collect();
+            foreach ($source_inputs as $input) {
+                $values = $entity_service->getValues($entity_relation->id, $input->id);
+                $labels = collect();
+                if ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_USER) {
+                    foreach ($values as $value) {
+                        $user = User::find($value->target_id);
+                        if ($user) {
+                            $label = $user->name . (strlen((string) $user->userid) ? '（' . $user->userid . '）' : '');
+                            if ((int) $user->status !== UserStatus::active) {
+                                $label .= '［利用停止等］';
+                            }
+                            $labels->push($label);
+                        }
+                    }
+                } elseif ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_GROUP) {
+                    foreach ($values as $value) {
+                        $group = Group::find($value->target_id);
+                        if ($group) {
+                            $labels->push($group->name);
+                        }
+                    }
+                }
+                $per_record->put($input->id, $labels);
+            }
+            $entity_display->put($entity_relation->id, (object) [
+                'name' => $entity_relation->relation_name,
+                'values' => $per_record,
+            ]);
+        }
+
         return $this->view('databaserelations', compact(
-            'frame_id', 'database', 'database_frame', 'relations', 'source_inputs', 'source_labels', 'relation_display'
+            'frame_id', 'database', 'database_frame', 'relations', 'source_inputs', 'source_labels', 'relation_display',
+            'entity_relations', 'entity_display'
         ));
     }
 
@@ -95,6 +141,7 @@ class DatabaserelationsPlugin extends UserPluginBase
         $databases_id = (int) FrameConfig::getConfigValue($this->frame_configs, 'databases_id', 0);
         $service = new DatabaseRelationService();
         $relations = $databases_id ? $service->getRelations($databases_id) : collect();
+        $entity_relations = $databases_id ? (new DatabaseEntityRelationService())->getRelations($databases_id) : collect();
         $columns = DatabasesColumns::orderBy('databases_id')->orderBy('display_sequence')->orderBy('id')->get()->groupBy('databases_id');
         $database_frames = collect();
         foreach ($databases as $database) {
@@ -118,7 +165,7 @@ class DatabaserelationsPlugin extends UserPluginBase
         }
 
         return $this->view('databaserelations_edit_relations', compact(
-            'databases', 'databases_id', 'relations', 'columns', 'database_frames', 'editing_relation'
+            'databases', 'databases_id', 'relations', 'entity_relations', 'columns', 'database_frames', 'editing_relation'
         ))->withInput($request->all);
     }
 
@@ -144,6 +191,7 @@ class DatabaserelationsPlugin extends UserPluginBase
         $databases_id = (int) FrameConfig::getConfigValue($this->frame_configs, 'databases_id', 0);
         $validator = Validator::make($request->all(), [
             'one_database_id' => ['required', 'integer', 'exists:databases,id'],
+            'relation_type' => ['required', 'in:one_to_many,many_to_many'],
             'many_database_id' => ['required', 'integer', 'exists:databases,id', 'different:one_database_id'],
             'one_relation_name' => ['required', 'string', 'max:255'],
             'many_relation_name' => ['required', 'string', 'max:255'],
@@ -154,7 +202,7 @@ class DatabaserelationsPlugin extends UserPluginBase
             'display_sequence' => ['required', 'integer'],
         ]);
         $validator->setAttributeNames([
-            'one_database_id' => '単数件側のDB', 'many_database_id' => '複数件側のDB',
+            'one_database_id' => '関連先DB', 'many_database_id' => '対象DB', 'relation_type' => '関連付け方',
             'one_relation_name' => '単数件側での表示名', 'many_relation_name' => '複数件側での表示名',
             'one_display_column_id' => '単数件側の表示項目', 'many_display_column_id' => '複数件側の表示項目',
             'one_detail_frame_id' => '単数件側の詳細表示先', 'many_detail_frame_id' => '複数件側の詳細表示先',
@@ -195,13 +243,110 @@ class DatabaserelationsPlugin extends UserPluginBase
             return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
         }
 
+        $service = new DatabaseRelationService();
+        if ($relation->id &&
+            $relation->isManyToMany() &&
+            $request->relation_type === DatabasesRelations::RELATION_TYPE_ONE_TO_MANY &&
+            $service->hasManyToManyConflicts($relation->id)) {
+            $validator->errors()->add(
+                'relation_type',
+                '同じ対象DBレコードに複数の関連先が設定されているため、1件対複数件には変更できません。重複する関連付けを解消してから変更してください。'
+            );
+            return $this->editRelations($request, $page_id, $frame_id, $id)->withErrors($validator);
+        }
+
         $relation->fill($request->only([
-            'one_database_id','many_database_id','one_relation_name','many_relation_name',
+            'one_database_id','many_database_id','relation_type','one_relation_name','many_relation_name',
             'one_display_column_id','one_detail_frame_id','many_display_column_id','many_detail_frame_id','display_sequence',
         ]));
         $relation->save();
 
         return $this->editRelations($request, $page_id, $frame_id);
+    }
+
+    public function saveEntityRelation($request, $page_id, $frame_id)
+    {
+        $databases_id = (int) FrameConfig::getConfigValue($this->frame_configs, 'databases_id', 0);
+        if (!$databases_id || !Databases::where('id', $databases_id)->exists()) {
+            return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'relation_name' => ['required', 'string', 'max:255'],
+            'display_sequence' => ['required', 'integer'],
+        ]);
+        $validator->setAttributeNames(['relation_name' => '表示名', 'display_sequence' => '表示順']);
+        if ($validator->fails()) {
+            return $this->editRelations($request, $page_id, $frame_id)->withErrors($validator, 'entityRelation');
+        }
+
+        if (DatabasesEntityRelations::where('databases_id', $databases_id)
+            ->where('target_type', DatabasesEntityRelations::TARGET_TYPE_USER)->exists()) {
+            $validator->errors()->add('relation_name', 'Connect-CMSユーザーとの関連は、このDBにすでに設定されています。');
+            return $this->editRelations($request, $page_id, $frame_id)->withErrors($validator, 'entityRelation');
+        }
+
+        DatabasesEntityRelations::create([
+            'databases_id' => $databases_id,
+            'target_type' => DatabasesEntityRelations::TARGET_TYPE_USER,
+            'relation_name' => $request->relation_name,
+            'required_flag' => false,
+            'target_max_count' => 1,
+            'target_unique' => true,
+            'display_sequence' => (int) $request->display_sequence,
+        ]);
+
+        return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
+    }
+
+    public function saveGroupEntityRelation($request, $page_id, $frame_id)
+    {
+        $databases_id = (int) FrameConfig::getConfigValue($this->frame_configs, 'databases_id', 0);
+        if (!$databases_id || !Databases::where('id', $databases_id)->exists()) {
+            return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'group_relation_name' => ['required', 'string', 'max:255'],
+            'group_display_sequence' => ['required', 'integer'],
+        ]);
+        $validator->setAttributeNames(['group_relation_name' => '表示名', 'group_display_sequence' => '表示順']);
+        if ($validator->fails()) {
+            return $this->editRelations($request, $page_id, $frame_id)
+                ->withErrors($validator, 'groupEntityRelation');
+        }
+
+        if (DatabasesEntityRelations::where('databases_id', $databases_id)
+            ->where('target_type', DatabasesEntityRelations::TARGET_TYPE_GROUP)->exists()) {
+            $validator->errors()->add('group_relation_name', 'Connect-CMSユーザーグループとの関連は、このDBにすでに設定されています。');
+            return $this->editRelations($request, $page_id, $frame_id)
+                ->withErrors($validator, 'groupEntityRelation');
+        }
+
+        DatabasesEntityRelations::create([
+            'databases_id' => $databases_id,
+            'target_type' => DatabasesEntityRelations::TARGET_TYPE_GROUP,
+            'relation_name' => $request->group_relation_name,
+            'required_flag' => false,
+            'target_max_count' => 0,
+            'target_unique' => false,
+            'display_sequence' => (int) $request->group_display_sequence,
+        ]);
+
+        return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
+    }
+
+    public function deleteEntityRelation($request, $page_id, $frame_id, $id)
+    {
+        $databases_id = (int) FrameConfig::getConfigValue($this->frame_configs, 'databases_id', 0);
+        $relation = DatabasesEntityRelations::where('id', $id)->where('databases_id', $databases_id)->first();
+        if ($relation) {
+            DB::transaction(function () use ($relation) {
+                DatabasesEntityRelationValues::where('databases_entity_relation_id', $relation->id)->delete();
+                $relation->delete();
+            });
+        }
+        return redirect('/plugin/databaserelations/editRelations/' . $page_id . '/' . $frame_id . '#frame-' . $frame_id);
     }
 
     public function deleteRelation($request, $page_id, $frame_id, $id)
@@ -255,14 +400,26 @@ class DatabaserelationsPlugin extends UserPluginBase
                 'name' => $side === 'one' ? $relation->one_relation_name : $relation->many_relation_name,
                 'options' => $options,
                 'selected' => $selected,
+                'multiple' => $relation->isManyToMany() || $side === 'one',
             ]);
+        }
+
+        $entity_service = new DatabaseEntityRelationService();
+        $entity_relations = $entity_service->getRelations($databases_id);
+        $user_options = $entity_service->getUserOptions();
+        $group_options = $entity_service->getGroupOptions();
+        $entity_selected = collect();
+        foreach ($entity_relations as $entity_relation) {
+            $values = $entity_service->getValues($entity_relation->id, $id);
+            $entity_selected->put($entity_relation->id, $values->pluck('target_id')->all());
         }
 
         $source_label = $this->getRecordLabels(collect([$source_input]), $this->getDefaultDisplayColumn($databases_id))
             ->get($source_input->id, '#' . $source_input->id);
 
         return $this->view('databaserelations_edit_record', compact(
-            'frame_id','database','source_input','source_label','relations','relation_forms'
+            'frame_id','database','source_input','source_label','relations','relation_forms',
+            'entity_relations','user_options','group_options','entity_selected'
         ));
     }
 
@@ -282,7 +439,8 @@ class DatabaserelationsPlugin extends UserPluginBase
         foreach ($relations as $relation) {
             $side = $relation->sideForDatabase($databases_id);
             $other_database_id = $side === 'one' ? $relation->many_database_id : $relation->one_database_id;
-            $ids = $side === 'one'
+            $multiple = $relation->isManyToMany() || $side === 'one';
+            $ids = $multiple
                 ? array_values(array_filter((array) ($requested[$relation->id] ?? [])))
                 : array_values(array_filter([(int) ($requested[$relation->id] ?? 0)]));
 
@@ -294,17 +452,62 @@ class DatabaserelationsPlugin extends UserPluginBase
             }
         }
 
+        $entity_service = new DatabaseEntityRelationService();
+        $entity_relations = $entity_service->getRelations($databases_id);
+        $entity_requested = (array) $request->input('entity_relation_values', []);
+        foreach ($entity_relations as $entity_relation) {
+            $target_ids = array_values(array_filter((array) ($entity_requested[$entity_relation->id] ?? [])));
+            if ($entity_relation->target_max_count > 0 && count(array_unique($target_ids)) > $entity_relation->target_max_count) {
+                $errors['entity_relation_values.' . $entity_relation->id] = '関連付け可能な件数を超えています。';
+                continue;
+            }
+
+            if ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_USER) {
+                foreach ($target_ids as $user_id) {
+                    $user_id = (int) $user_id;
+                    $selected_user = User::find($user_id);
+                    $current_ids = $entity_service->getValues($entity_relation->id, $id)->pluck('target_id');
+                    $is_existing_value = $current_ids->contains($user_id);
+                    if (!$selected_user || ((int) $selected_user->status !== UserStatus::active && !$is_existing_value)) {
+                        $errors['entity_relation_values.' . $entity_relation->id] = '新しく関連付ける場合は、利用可能なユーザーを選択してください。';
+                        break;
+                    }
+                    if ($entity_relation->target_unique &&
+                        DatabasesEntityRelationValues::where('databases_entity_relation_id', $entity_relation->id)
+                            ->where('target_id', $user_id)->where('databases_input_id', '<>', $id)->exists()) {
+                        $errors['entity_relation_values.' . $entity_relation->id] = 'このユーザーは、すでに別のレコードへ関連付けられています。';
+                        break;
+                    }
+                }
+            } elseif ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_GROUP) {
+                foreach ($target_ids as $group_id) {
+                    if (!Group::where('id', (int) $group_id)->exists()) {
+                        $errors['entity_relation_values.' . $entity_relation->id] = '関連先のユーザーグループが正しくありません。';
+                        break;
+                    }
+                }
+            }
+        }
+
         if ($errors) {
             return $this->editRecordRelations($request, $page_id, $frame_id, $id)->withErrors($errors);
         }
 
-        DB::transaction(function () use ($relations, $requested, $databases_id, $id, $service) {
+        DB::transaction(function () use ($relations, $requested, $databases_id, $id, $service, $entity_relations, $entity_requested, $entity_service) {
             foreach ($relations as $relation) {
                 $side = $relation->sideForDatabase($databases_id);
-                if ($side === 'one') {
-                    $service->saveFromOneSide($relation->id, $id, (array) ($requested[$relation->id] ?? []));
-                } else {
-                    $service->saveFromManySide($relation->id, $id, (int) ($requested[$relation->id] ?? 0));
+                $multiple = $relation->isManyToMany() || $side === 'one';
+                $ids = $multiple
+                    ? (array) ($requested[$relation->id] ?? [])
+                    : [(int) ($requested[$relation->id] ?? 0)];
+                $service->saveRelationValues($relation, $databases_id, $id, $ids);
+            }
+            foreach ($entity_relations as $entity_relation) {
+                $target_ids = (array) ($entity_requested[$entity_relation->id] ?? []);
+                if ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_USER) {
+                    $entity_service->saveUser($entity_relation, $id, (int) ($target_ids[0] ?? 0));
+                } elseif ($entity_relation->target_type === DatabasesEntityRelations::TARGET_TYPE_GROUP) {
+                    $entity_service->saveGroups($entity_relation, $id, $target_ids);
                 }
             }
         });
