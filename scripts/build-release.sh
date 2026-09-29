@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:-0.9.0-beta.2}"
+version="${1:-0.9.0-beta.3}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_root="${repo_root}/build"
 package_name="connect-cms-databaserelations-${version}"
