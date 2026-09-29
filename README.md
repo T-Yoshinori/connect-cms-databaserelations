@@ -1,14 +1,14 @@
 # Connect-CMS DatabaseRelations
 
-Connect-CMSの汎用データベース同士に、双方向の1対多リレーションを追加する非公式プラグインです。
+Connect-CMSの汎用データベースに、DB間およびConnect-CMSのUser / UserGroupとのリレーションを追加する非公式プラグインです。
 
-> バージョン: 0.9.0-beta.2  
+> バージョン: 0.9.0-beta.3  
 > 開発・提供: ゆうゆう企画  
 > 状態: ベータ版
 
 ## 主な機能
 
-- 2つの汎用データベース間に「単数件側 / 複数件側」の1対多リレーションを定義
+- 2つの汎用データベース間に1対多または多対多のリレーションを定義
 - 単数件側から複数の関連レコードを選択
 - 複数件側から単数件側の関連レコードを選択
 - どちら側から変更しても同じ関連付けを更新
@@ -18,8 +18,8 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 - 関連データから相手側DBの詳細画面へ移動
 - DatabaseRelations → DB一覧 → 詳細 → 関連先詳細 → 元詳細 → 一覧 → DatabaseRelations の戻り導線
 - 1つのDBに複数の独立したリレーションを設定可能
-
-多対多専用の機構、Connect-CMSのUsers / Groupsとのリレーションは含みません。多対多が必要な場合は、中間DBを使用して1対多の組み合わせで構成します。
+- DBレコードとConnect-CMS Userを任意で関連付け（1レコード最大1User、同一User重複不可）
+- DBレコードとConnect-CMS UserGroupを多対多で関連付け（複数Group選択、同一Groupの複数レコード利用可）
 
 ## 対応確認環境
 
@@ -42,7 +42,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 
 ## ダウンロード
 
-- [connect-cms-databaserelations-0.9.0-beta.2.zip](downloads/connect-cms-databaserelations-0.9.0-beta.2.zip)
+- [connect-cms-databaserelations-0.9.0-beta.3.zip](downloads/connect-cms-databaserelations-0.9.0-beta.3.zip)
 
 ## インストール
 
@@ -52,7 +52,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 4. Connect-CMSのルートで `php artisan migrate` を実行します。
 5. `php artisan view:clear` を実行します。
 6. 管理画面で「データベースリレーション」フレームを配置します。
-7. フレーム設定で対象DBを選択し、単数件側・複数件側のDBと表示名を設定します。
+7. フレーム設定で管理するDBを選択し、必要なDB間リレーション、User関連、UserGroup関連を設定します。
 8. 関連データをDatabases詳細画面に表示する場合は、対象Databasesフレームのテンプレートを「リレーション連携」に変更します。
 
 ## 基本構造
@@ -65,7 +65,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 - タスクからは1件の案件を関連付けできます。
 - 同じ関連付けを双方から確認・変更できます。
 
-多対多は、中間DBを用意して2つの1対多リレーションとして構成します。
+多対多を選択した場合は、双方のDBレコードから複数件を直接関連付けできます。
 
 ## ベータ版の注意
 
@@ -73,7 +73,7 @@ Connect-CMSの汎用データベース同士に、双方向の1対多リレー�
 - 不具合時に復元できる環境で利用してください。
 - Connect-CMS本体のDatabasesPlugin.phpやDatabases Modelは変更しません。
 - Databasesとの画面連携は追加の「relation」テンプレートで行います。
-- Users、Groups、Sectionsを直接リレーション対象にする機能は含みません。
+- User / UserGroupとのEntity Relationに対応しています。Sectionsとの直接リレーションは含みません。
 
 ## ライセンス・免責
 
