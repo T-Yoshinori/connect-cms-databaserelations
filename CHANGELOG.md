@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0-beta.3 - 2026-09-29
+
+- DB間の多対多リレーションに対応
+- DBレコードとConnect-CMS Userの関連付けに対応
+- DBレコードとConnect-CMS UserGroupの多対多関連付けに対応
+- Entity Relationの値構造を汎用化し、target_max_count / target_unique をService層の制約として利用
+- UserGroupはGroup本体を参照し、GroupUserの所属レコードは保存しない設計
+
+
 ## 0.9.0-beta.2 - 2026-09-27
 
 - 関連情報カードの見出しを連携先DB名に変更
