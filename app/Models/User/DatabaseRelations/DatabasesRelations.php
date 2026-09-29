@@ -11,12 +11,15 @@ class DatabasesRelations extends Model
     use UserableNohistory;
 
     const TARGET_TYPE_DATABASE = 'database';
+    const RELATION_TYPE_ONE_TO_MANY = 'one_to_many';
+    const RELATION_TYPE_MANY_TO_MANY = 'many_to_many';
 
     protected $table = 'databases_relations';
 
     protected $fillable = [
         'one_database_id',
         'many_database_id',
+        'relation_type',
         'one_relation_name',
         'many_relation_name',
         'one_display_column_id',
@@ -25,6 +28,11 @@ class DatabasesRelations extends Model
         'many_detail_frame_id',
         'display_sequence',
     ];
+
+    public function isManyToMany()
+    {
+        return $this->relation_type === self::RELATION_TYPE_MANY_TO_MANY;
+    }
 
     public function oneDatabase()
     {
