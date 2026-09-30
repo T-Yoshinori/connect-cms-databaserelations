@@ -41,6 +41,11 @@
    <strong>DB A・DB Bについて</strong><br>
    「この画面で管理するDB」をDB AまたはDB Bのどちらかに指定し、もう一方に関連付けるDBを指定します。1:NではDB Aを1件側、DB Bを複数件側として扱います。N:NではDB A・DB Bの区別は関連付け数には影響せず、双方から複数件を関連付けられます。
   </div>
+  <div class="alert alert-info">
+   <strong>関連一覧の表示・検索・絞り込み・並び替えについて</strong><br>
+   Databases詳細画面に表示する関連一覧は、連携先DBの項目設定を利用します。<br>
+   一覧に表示する項目は連携先DBの「一覧表示」、キーワード検索の対象は「検索」、絞り込みの対象は「絞り込み」、並び替えの対象は「並び替え」の設定に従います。関連一覧の絞り込みは、プルダウン内で複数の選択肢を選べます。これらの項目はDatabaseRelationsでは設定しません。変更する場合は、連携先DBの項目設定を変更してください。
+  </div>
   <form action="{{url('/')}}/plugin/databaserelations/saveRelation/{{$page->id}}/{{$frame_id}}@if($editing_relation->id)/{{$editing_relation->id}}@endif#frame-{{$frame->id}}" method="POST">
    {{csrf_field()}}
    <div class="form-group row">
@@ -108,6 +113,19 @@
    <div class="form-group row">
     <label class="{{$frame->getSettingLabelClass()}}">DB Bの表示項目</label>
     <div class="{{$frame->getSettingInputClass()}}"><select name="many_display_column_id" id="relation_many_col_{{$frame_id}}" class="form-control"><option value="">自動</option>@foreach($columns as $dbid=>$dbcols)@foreach($dbcols as $column)<option value="{{$column->id}}" data-database-id="{{$dbid}}" @if(old('many_display_column_id',$editing_relation->many_display_column_id)==$column->id) selected @endif>{{$column->column_name}}</option>@endforeach @endforeach</select></div>
+   </div>
+   <div class="form-group row">
+    <label class="{{$frame->getSettingLabelClass()}}">関連一覧の表示件数</label>
+    <div class="{{$frame->getSettingInputClass()}}">
+     @php($relationViewCount=(int)old('view_count',$editing_relation->view_count ?: 10))
+     <select name="view_count" class="form-control col-sm-3">
+      @foreach([5,10,20,50,100] as $count)
+       <option value="{{$count}}" @if($relationViewCount===$count) selected @endif>{{$count}}件</option>
+      @endforeach
+     </select>
+     <small class="form-text text-muted">Databases詳細画面の関連一覧で、1ページに表示する件数です。</small>
+     @if($errors->has('view_count'))<div class="text-danger">{{$errors->first('view_count')}}</div>@endif
+    </div>
    </div>
    <div class="form-group row">
     <label class="{{$frame->getSettingLabelClass()}}">表示順</label>
