@@ -112,11 +112,131 @@
 
 @if ($related_records->isNotEmpty())
     @foreach ($related_records as $related_record)
-    <div class="card mt-4">
+    <div class="card mt-4" id="relation-{{ $related_record->relation->id }}">
         <div class="card-header">
             <strong>{{ optional($related_record->database)->databases_name ?: $related_record->name }}</strong>
         </div>
-        <div class="card-body p-0">
+        <div class="card-body">
+            <form action="{{ request()->url() }}#relation-{{ $related_record->relation->id }}" method="GET" role="search" class="mb-3">
+                @foreach (request()->query() as $query_key => $query_value)
+                    @if (!in_array($query_key, [$related_record->search_key, $related_record->sort_key, $related_record->page_key]) && strpos($query_key, $related_record->filter_key_prefix) !== 0)
+                        @if (is_array($query_value))
+                            @foreach ($query_value as $query_item)
+                                <input type="hidden" name="{{ $query_key }}[]" value="{{ $query_item }}">
+                            @endforeach
+                        @else
+                            <input type="hidden" name="{{ $query_key }}" value="{{ $query_value }}">
+                        @endif
+                    @endif
+                @endforeach
+                <div class="form-row align-items-end">
+                    <div class="col-sm mb-2 mb-sm-0">
+                        <label class="sr-only" for="{{ $related_record->search_key }}">検索キーワード</label>
+                        <div class="input-group">
+                            <input type="text"
+                                   class="form-control"
+                                   id="{{ $related_record->search_key }}"
+                                   name="{{ $related_record->search_key }}"
+                                   value="{{ $related_record->search_keyword }}"
+                                   placeholder="検索はキーワードを入力してください。">
+                            <div class="input-group-append">
+                                <button type="submit" class="btn btn-primary" title="検索">
+                                    <i class="fas fa-search" role="presentation"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    @foreach ($related_record->select_columns as $select_column)
+                        @php
+                            $filter_key = $related_record->filter_key_prefix . $select_column->id;
+                            $filter_values = (array) ($related_record->filter_values[$select_column->id] ?? []);
+                            $filter_label = empty($filter_values)
+                                ? $select_column->column_name
+                                : $select_column->column_name . '：' . implode('、', $filter_values);
+                        @endphp
+                        <div class="col-sm mb-2 mb-sm-0">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle text-left w-100"
+                                        type="button"
+                                        id="{{ $filter_key }}_button"
+                                        data-toggle="dropdown"
+                                        aria-haspopup="true"
+                                        aria-expanded="false">
+                                    {{ $filter_label }}
+                                </button>
+                                <div class="dropdown-menu p-3" aria-labelledby="{{ $filter_key }}_button">
+                                    @foreach ($related_record->columns_selects->where('databases_columns_id', $select_column->id) as $columns_select)
+                                        @php
+                                            $checkbox_id = $filter_key . '_' . $columns_select->id;
+                                        @endphp
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox"
+                                                   class="custom-control-input"
+                                                   id="{{ $checkbox_id }}"
+                                                   name="{{ $filter_key }}[]"
+                                                   value="{{ $columns_select->value }}"
+                                                   @if (in_array((string) $columns_select->value, $filter_values, true)) checked @endif>
+                                            <label class="custom-control-label" for="{{ $checkbox_id }}">{{ $columns_select->value }}</label>
+                                        </div>
+                                    @endforeach
+                                    <div class="mt-2 pt-2 border-top text-right">
+                                        <button type="submit" class="btn btn-sm btn-primary">絞り込む</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                    @if ($related_record->sort_columns->isNotEmpty())
+                        <div class="col-sm mb-2 mb-sm-0">
+                            <label class="sr-only" for="{{ $related_record->sort_key }}">並べ替え</label>
+                            <select class="form-control"
+                                    id="{{ $related_record->sort_key }}"
+                                    name="{{ $related_record->sort_key }}"
+                                    onchange="this.form.submit()">
+                                <option value="">並べ替え</option>
+                                @foreach ($related_record->sort_columns as $sort_column)
+                                    @if ((int) $sort_column->sort_flag === 1 || (int) $sort_column->sort_flag === 2)
+                                        <option value="{{ $sort_column->id }}_asc" @if ($related_record->sort_value === $sort_column->id . '_asc') selected @endif>
+                                            {{ $sort_column->column_name }}（昇順）
+                                        </option>
+                                    @endif
+                                    @if ((int) $sort_column->sort_flag === 1 || (int) $sort_column->sort_flag === 3)
+                                        <option value="{{ $sort_column->id }}_desc" @if ($related_record->sort_value === $sort_column->id . '_desc') selected @endif>
+                                            {{ $sort_column->column_name }}（降順）
+                                        </option>
+                                    @endif
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    @if (strlen($related_record->search_keyword) || strlen($related_record->sort_value) || collect($related_record->filter_values)->flatten()->filter(function ($value) { return strlen((string) $value); })->isNotEmpty())
+                        <div class="col-auto">
+                            @php
+                                $clear_query = request()->query();
+                                unset($clear_query[$related_record->search_key], $clear_query[$related_record->sort_key], $clear_query[$related_record->page_key]);
+                                foreach (array_keys($clear_query) as $clear_key) {
+                                    if (strpos($clear_key, $related_record->filter_key_prefix) === 0) {
+                                        unset($clear_query[$clear_key]);
+                                    }
+                                }
+                            @endphp
+                            <a class="btn btn-outline-secondary"
+                               href="{{ request()->url() }}{{ $clear_query ? '?' . http_build_query($clear_query) : '' }}#relation-{{ $related_record->relation->id }}">
+                                クリア
+                            </a>
+                        </div>
+                    @endif
+                </div>
+            </form>
+
+            <div class="small text-muted mb-2">
+                @if ($related_record->items->total() > 0)
+                    全{{ $related_record->items->total() }}件中 {{ $related_record->items->firstItem() }}～{{ $related_record->items->lastItem() }}件
+                @else
+                    0件
+                @endif
+            </div>
+
             @if ($related_record->items->isNotEmpty())
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
@@ -163,7 +283,19 @@
                     </table>
                 </div>
             @else
-                <div class="p-3 text-muted">関連付けなし</div>
+                <div class="text-muted">
+                    @if (strlen($related_record->search_keyword) || collect($related_record->filter_values)->flatten()->filter(function ($value) { return strlen((string) $value); })->isNotEmpty())
+                        検索・絞り込み条件に一致する関連レコードはありません。
+                    @else
+                        関連付けなし
+                    @endif
+                </div>
+            @endif
+
+            @if ($related_record->items->hasPages())
+                <div class="mt-3">
+                    {{ $related_record->items->links() }}
+                </div>
             @endif
         </div>
     </div>
