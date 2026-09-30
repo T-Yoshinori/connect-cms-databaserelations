@@ -2,7 +2,7 @@
 
 Connect-CMSの汎用データベースに、DB間およびConnect-CMSのUser / UserGroupとのリレーションを追加する非公式プラグインです。
 
-> バージョン: 0.9.0-beta.3  
+> バージョン: 0.9.0-beta.4  
 > 開発・提供: ゆうゆう企画  
 > 状態: ベータ版
 
@@ -20,6 +20,10 @@ Connect-CMSの汎用データベースに、DB間およびConnect-CMSのUser / U
 - 1つのDBに複数の独立したリレーションを設定可能
 - DBレコードとConnect-CMS Userを任意で関連付け（1レコード最大1User、同一User重複不可）
 - DBレコードとConnect-CMS UserGroupを多対多で関連付け（複数Group選択、同一Groupの複数レコード利用可）
+- 関連一覧をキーワード検索
+- 連携先DBの「絞り込み」設定を利用した複数選択フィルター
+- 関連一覧の並び替え
+- リレーションごとのページネーション・表示件数設定
 
 ## 対応確認環境
 
@@ -42,7 +46,7 @@ Connect-CMSの汎用データベースに、DB間およびConnect-CMSのUser / U
 
 ## ダウンロード
 
-- [connect-cms-databaserelations-0.9.0-beta.3.zip](downloads/connect-cms-databaserelations-0.9.0-beta.3.zip)
+- [connect-cms-databaserelations-0.9.0-beta.4.zip](downloads/connect-cms-databaserelations-0.9.0-beta.4.zip)
 
 ## インストール
 
