@@ -27,6 +27,7 @@ class DatabasesRelations extends Model
         'many_display_column_id',
         'many_detail_frame_id',
         'display_sequence',
+        'view_count',
     ];
 
     public function isManyToMany()
